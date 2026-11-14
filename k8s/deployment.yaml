@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: hello-world
-          image: hello-world:v2
+          image: ghcr.io/kirankumar544/hello-world-project:8fc125656a3792061456384bcc488a25524b70f5
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 80
