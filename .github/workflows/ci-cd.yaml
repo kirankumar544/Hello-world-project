@@ -6,7 +6,7 @@ on:
     branches:
       - main
     paths-ignore:
-      - deployment.yaml
+      - k8s/deployment.yaml
 
   pull_request:
     branches:
@@ -22,17 +22,17 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1: Checkout source code
+      # 1. Checkout repository
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # Step 2: Generate lowercase image name and tag
+      # 2. Generate lowercase image name
       - name: Set Image Name
         run: |
           echo "IMAGE_NAME=ghcr.io/${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
           echo "IMAGE_TAG=${GITHUB_SHA}" >> $GITHUB_ENV
 
-      # Step 3: Login to GitHub Container Registry
+      # 3. Login to GitHub Container Registry
       - name: Login to GHCR
         if: github.event_name == 'push'
         uses: docker/login-action@v3
@@ -41,7 +41,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Step 4: Build and push Docker image
+      # 4. Build and push Docker image
       - name: Build and Push Docker Image
         uses: docker/build-push-action@v6
         with:
@@ -49,27 +49,32 @@ jobs:
           push: ${{ github.event_name == 'push' }}
           tags: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
 
-      # Step 5: Update deployment.yaml image tag
+      # 5. Update Kubernetes deployment manifest
       - name: Update deployment.yaml
         if: github.event_name == 'push'
         run: |
-          sed -i "s|image:.*|image: ${IMAGE_NAME}:${IMAGE_TAG}|" k8s/deployment.yaml
+          if ! grep -qE '^[[:space:]]*image:' k8s/deployment.yaml; then
+            echo "ERROR: No image field found in k8s/deployment.yaml"
+            exit 1
+          fi
 
-          echo "Updated deployment.yaml:"
-          cat deployment.yaml
+          sed -i -E "s|(^[[:space:]]*image:).*|\1 ${IMAGE_NAME}:${IMAGE_TAG}|" k8s/deployment.yaml
 
-      # Step 6: Commit updated deployment.yaml
+          echo "Updated k8s/deployment.yaml:"
+          cat k8s/deployment.yaml
+
+      # 6. Commit and push updated manifest
       - name: Commit and Push Updated Manifest
         if: github.event_name == 'push'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add deployment.yaml
+          git add k8s/deployment.yaml
 
           if ! git diff --cached --quiet; then
             git commit -m "Update deployment image to ${IMAGE_TAG}"
-            git push
+            git push origin HEAD:main
           else
             echo "No changes to deployment.yaml"
           fi
